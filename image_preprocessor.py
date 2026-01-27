@@ -31,5 +31,7 @@ for i in range(1, 203):
     cropped_bw = crop_9_16_center(bw)
     if cv2.countNonZero(cropped_bw) > 265000:
         continue
+    colored_crop = crop_9_16_center(img)
     cv2.imwrite(f"input_stickman_video/prepro_vid1/{x}.jpg", cropped_bw)
+    cv2.imwrite(f'input_stickman_video/colored_prepro_vid1/{x}.jpg', colored_crop)
     x+=1

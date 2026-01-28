@@ -17,8 +17,8 @@ def crop_9_16_center(image):
     return image[start_y:start_y+new_h, start_x:start_x+new_w]
 
 x = 1
-for i in range(1, 203):
-    img = cv2.imread(f"input_stickman_video/frames_vid1/000{i:>3}.jpg".replace(' ', '0'))
+for i in range(1, 202):
+    img = cv2.imread(f"input_stickman_video/frames_vid2/000{i:>3}.jpg".replace(' ', '0'))
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     _, bw = cv2.threshold(
         gray,
@@ -32,6 +32,6 @@ for i in range(1, 203):
     if cv2.countNonZero(cropped_bw) > 265000:
         continue
     colored_crop = crop_9_16_center(img)
-    cv2.imwrite(f"input_stickman_video/prepro_vid1/{x}.jpg", cropped_bw)
-    cv2.imwrite(f'input_stickman_video/colored_prepro_vid1/{x}.jpg', colored_crop)
+    cv2.imwrite(f"input_stickman_video/prepro_vid2/{x}.jpg", cropped_bw)
+    cv2.imwrite(f'input_stickman_video/colored_prepro_vid2/{x}.jpg', colored_crop)
     x+=1

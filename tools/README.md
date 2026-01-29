@@ -10,21 +10,24 @@ Tools for annotating stickman images with OpenPose-style 18-keypoint body pose d
 
 **Solution**: Semi-automated approach:
 1. Manually annotate 80-150 diverse images
-2. Train a lightweight CNN (ResNet18-based) on those annotations
+2. Train a lightweight CNN (ResNet34-based) on those annotations
 3. Use the trained model to predict keypoints on remaining images
 4. Review/correct predictions as needed
 
 **What was tried**:
 - First attempt used MobileNetV2 + heatmap prediction → poor results
-- Second attempt (current) uses ResNet18 + direct coordinate regression + heavy data augmentation → **8.7px error**, much better results
+- Second attempt used ResNet18 + direct coordinate regression + data augmentation → 8.7px error
+- Third attempt (current) uses ResNet34 + mixed precision + OneCycleLR → **5.7px error**, best results
 
 ## Files
 
 ```
 tools/
 ├── annotate_keypoints.py      # Manual annotation GUI (OpenCV-based)
-├── train_keypoint_v2.py       # Train keypoint detector (ResNet18 + regression)
-├── predict_keypoints_v2.py    # Predict on unannotated images
+├── train_keypoint_v2.py       # Legacy training script (ResNet18)
+├── train_keypoint_v3.py       # Optimized training (ResNet34 + FP16) ← RECOMMENDED
+├── predict_keypoints_v2.py    # Legacy prediction script
+├── predict_keypoints_v3.py    # Batch prediction with FP16 ← RECOMMENDED
 ├── checkpoints/               # Saved models
 │   └── best_keypoint_regressor.pt
 └── README.md                  # This file
@@ -32,30 +35,33 @@ tools/
 input_stickman_video/
 ├── all_bw_images_480p/        # Source images (509 stickman images, 480x640)
 └── keypoint_annotations/
-    ├── annotations.json       # Active annotations file
-    └── annotations_manual_backup.json  # Backup of manual-only annotations
+    ├── annotations.json       # Active annotations file (all 509 images)
+    ├── annotations_manual_backup_v1.json  # Backup of ~80 manual annotations
+    └── annotations_manual_backup_v2.json  # Backup of 126 manual annotations
 ```
 
 ## Architecture Details
 
-**Model**: `KeypointRegressor` in `train_keypoint_v2.py`
-- Backbone: ResNet18 (pretrained on ImageNet)
-- Head: FC layers (512 → 256 → 128 → 54) with dropout
+**Model**: `KeypointRegressor` in `train_keypoint_v3.py`
+- Backbone: ResNet34 (pretrained on ImageNet)
+- Head: FC layers (512 → 512 → 256 → 54) with dropout
 - Output: 18 keypoints × 3 values (x, y, visibility) normalized to [0,1]
 - Loss: Wing loss for coordinates + BCE for visibility
 
-**Data Augmentation** (8x virtual samples per image):
+**Data Augmentation** (12x virtual samples per image):
 - Horizontal flip with left/right keypoint swapping
-- Random rotation (±15°)
-- Random scale (0.9-1.1x)
-- Color jitter (brightness 0.8-1.2x)
+- Random rotation (±20°)
+- Random scale (0.85-1.15x)
+- Color jitter (brightness 0.7-1.3x)
 
-**Training Config**:
+**Training Config (v3 - RTX 3090 optimized)**:
 - Image size: 256×256
-- Batch size: 16
-- Learning rate: 1e-4 with cosine annealing
-- Early stopping: patience=30
+- Batch size: 64
+- Learning rate: 3e-4 with OneCycleLR
+- Mixed precision (FP16) for 2x speed
+- Early stopping: patience=25
 - Validation split: 15%
+- Workers: 8
 
 ## Workflow
 
@@ -102,27 +108,37 @@ python tools/annotate_keypoints.py
 After annotating 50-100 diverse images:
 
 ```bash
+# Recommended (optimized for RTX 3090)
+python tools/train_keypoint_v3.py --backbone resnet34 --batch-size 64 --epochs 150
+
+# Legacy version
 python tools/train_keypoint_v2.py
 ```
 
-**Features:**
-- ResNet18 backbone with regression head
-- Heavy data augmentation (8x virtual samples)
+**Features (v3):**
+- ResNet34 backbone with regression head
+- Heavy data augmentation (12x virtual samples)
 - Wing loss for better keypoint accuracy
-- Cosine annealing learning rate
-- Early stopping with patience=30
+- OneCycleLR for faster convergence
+- Mixed precision (FP16) training
+- Early stopping with patience=25
 
 **Training output:**
 - Best model saved to `tools/checkpoints/best_keypoint_regressor.pt`
-- Reports pixel error on validation set
+- Reports pixel error on validation set (~5.7px with 126 training images)
 
 ### Step 3: Predict on All Images
 
 ```bash
+# Recommended (batch processing with FP16)
+python tools/predict_keypoints_v3.py --batch-size 64
+
+# Legacy version
 python tools/predict_keypoints_v2.py
 ```
 
 This predicts keypoints on all unannotated images and adds them to the annotations file.
+Manual annotations are preserved and not overwritten.
 
 ### Step 4: Review & Correct (Optional)
 
@@ -158,9 +174,12 @@ Visibility values:
 
 ## Model Performance
 
-With ~80 training images and data augmentation:
-- **Pixel Error: ~8.7px** on 256x256 images
-- Suitable for most stickman pose estimation tasks
+| Version | Backbone | Training Images | Pixel Error |
+|---------|----------|-----------------|-------------|
+| v2 | ResNet18 | 80 | 8.7px |
+| v3 | ResNet34 | 126 | **5.7px** |
+
+Current model achieves **5.7px error** on 256x256 images, suitable for stickman pose estimation.
 
 ## Tips
 
@@ -171,10 +190,11 @@ With ~80 training images and data augmentation:
 
 ## Current State
 
-- **80 images** manually annotated (saved in `annotations_manual_backup.json`)
-- **Model trained** with ~8.7px validation error
-- **All 509 images** have predictions (stored in `annotations.json`)
-- User is adding more manual annotations to improve model accuracy
+- **126 images** manually annotated (saved in `annotations_manual_backup_v2.json`)
+- **Model trained** with 5.7px validation error (ResNet34 backbone)
+- **All 509 images** have keypoint annotations (stored in `annotations.json`)
+  - 126 manual annotations
+  - 383 model predictions
 
 ## For Future AI/Developers
 
@@ -186,13 +206,13 @@ If you need to modify this:
 
 3. **To retrain after adding annotations**:
    ```bash
-   python tools/train_keypoint_v2.py
-   python tools/predict_keypoints_v2.py
+   python tools/train_keypoint_v3.py --backbone resnet34 --batch-size 64
+   python tools/predict_keypoints_v3.py --batch-size 64
    ```
 
 4. **To restore manual-only annotations**:
    ```bash
-   cp input_stickman_video/keypoint_annotations/annotations_manual_backup.json input_stickman_video/keypoint_annotations/annotations.json
+   cp input_stickman_video/keypoint_annotations/annotations_manual_backup_v2.json input_stickman_video/keypoint_annotations/annotations.json
    ```
 
 5. **Annotation format** in JSON:

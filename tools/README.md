@@ -1,24 +1,61 @@
 # Keypoint Annotation Tools
 
-Tools for annotating stickman images with OpenPose-style 18-keypoint body pose data.
+Tools for annotating stickman images with OpenPose-style 18-keypoint body pose data, compatible with DWPose format (body only, hands/face disabled).
 
-## Overview
+## Background & Context
 
-This toolkit allows you to:
-1. **Manually annotate** a small set of images (~50-100)
-2. **Train a model** on your annotations
-3. **Auto-predict** keypoints on remaining images
+**Goal**: Annotate ~500 stickman images in `input_stickman_video/all_bw_images_480p/` with DWPose-compatible keypoints for training a video model.
+
+**Problem**: Manual annotation of 500+ images is tedious.
+
+**Solution**: Semi-automated approach:
+1. Manually annotate 80-150 diverse images
+2. Train a lightweight CNN (ResNet18-based) on those annotations
+3. Use the trained model to predict keypoints on remaining images
+4. Review/correct predictions as needed
+
+**What was tried**:
+- First attempt used MobileNetV2 + heatmap prediction → poor results
+- Second attempt (current) uses ResNet18 + direct coordinate regression + heavy data augmentation → **8.7px error**, much better results
 
 ## Files
 
 ```
 tools/
-├── annotate_keypoints.py      # Manual annotation GUI
-├── train_keypoint_v2.py       # Train keypoint detector
+├── annotate_keypoints.py      # Manual annotation GUI (OpenCV-based)
+├── train_keypoint_v2.py       # Train keypoint detector (ResNet18 + regression)
 ├── predict_keypoints_v2.py    # Predict on unannotated images
-└── checkpoints/               # Saved models
-    └── best_keypoint_regressor.pt
+├── checkpoints/               # Saved models
+│   └── best_keypoint_regressor.pt
+└── README.md                  # This file
+
+input_stickman_video/
+├── all_bw_images_480p/        # Source images (509 stickman images, 480x640)
+└── keypoint_annotations/
+    ├── annotations.json       # Active annotations file
+    └── annotations_manual_backup.json  # Backup of manual-only annotations
 ```
+
+## Architecture Details
+
+**Model**: `KeypointRegressor` in `train_keypoint_v2.py`
+- Backbone: ResNet18 (pretrained on ImageNet)
+- Head: FC layers (512 → 256 → 128 → 54) with dropout
+- Output: 18 keypoints × 3 values (x, y, visibility) normalized to [0,1]
+- Loss: Wing loss for coordinates + BCE for visibility
+
+**Data Augmentation** (8x virtual samples per image):
+- Horizontal flip with left/right keypoint swapping
+- Random rotation (±15°)
+- Random scale (0.9-1.1x)
+- Color jitter (brightness 0.8-1.2x)
+
+**Training Config**:
+- Image size: 256×256
+- Batch size: 16
+- Learning rate: 1e-4 with cosine annealing
+- Early stopping: patience=30
+- Validation split: 15%
 
 ## Workflow
 
@@ -131,3 +168,37 @@ With ~80 training images and data augmentation:
 2. **Copy from previous**: Use `C` key for video sequences where poses are similar
 3. **Iterative improvement**: If predictions are bad, correct some and retrain
 4. **More data = better**: 100+ annotations will give better results than 50
+
+## Current State
+
+- **80 images** manually annotated (saved in `annotations_manual_backup.json`)
+- **Model trained** with ~8.7px validation error
+- **All 509 images** have predictions (stored in `annotations.json`)
+- User is adding more manual annotations to improve model accuracy
+
+## For Future AI/Developers
+
+If you need to modify this:
+
+1. **Keypoint format**: OpenPose 18-point (not COCO 17-point). Key difference is "neck" keypoint at index 1.
+
+2. **Paths are relative**: All scripts use `Path(__file__).parent` to find project root.
+
+3. **To retrain after adding annotations**:
+   ```bash
+   python tools/train_keypoint_v2.py
+   python tools/predict_keypoints_v2.py
+   ```
+
+4. **To restore manual-only annotations**:
+   ```bash
+   cp input_stickman_video/keypoint_annotations/annotations_manual_backup.json input_stickman_video/keypoint_annotations/annotations.json
+   ```
+
+5. **Annotation format** in JSON:
+   ```json
+   {
+     "vid1_1.jpg": [[x, y, vis], [x, y, vis], ...],  // 18 keypoints
+   }
+   ```
+   Where `vis`: 0=not visible, 2=visible (normalized to 0-1 during training)

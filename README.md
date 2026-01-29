@@ -1,2 +1,183 @@
 # Video Model Dev
-Various stuff needed / done for the video model training
+
+Fast Pose→Video Generation System (480p Grayscale)
+
+## Project Goal
+
+Build a **fast, simple pose-to-video generation system** that outputs **480p black-and-white video**, prioritizing motion coherence and speed over photorealism. Designed for a single RTX 3090/A5000 (24GB VRAM).
+
+**Output style:** Stylized/lo-fi, silhouette-driven stickman animations with strong pose adherence and smooth limb motion.
+
+---
+
+## Architecture Overview
+
+### Training Pipeline (3 Stages)
+
+```
+Stage 1: VAE Training (current)
+    Input: 1×640×480 grayscale images
+    Output: Frozen VAE encoder/decoder
+    Latent: 4×80×60 (×8 downsample)
+
+Stage 2: Image Diffusion
+    Train pose-conditioned latent diffusion UNet on single frames
+    Conditioning: Pose heatmaps via FiLM (scale/shift)
+
+Stage 3: Video Fine-tuning  
+    Add temporal conv blocks to UNet
+    Train on short clips (24-48 frames, 2-4 seconds)
+```
+
+### Key Design Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Color | **Grayscale (1-channel)** | 2-3× lower compute, faster convergence, no color flicker |
+| Resolution | **480×640 (portrait)** | Matches source stickman videos |
+| VAE type | **Spatial/convolutional** | Preserves spatial structure for diffusion |
+| Normalization | **GroupNorm** | Works with any batch size |
+| VAE loss | **L1 + tiny KL (β=0.01)** | Sharp reconstructions, avoid posterior collapse |
+| Temporal modeling | **1D temporal convs only** | Lightweight, at mid+bottleneck blocks only |
+
+---
+
+## Directory Structure
+
+```
+Video-Model-Dev/
+├── README.md                          # This file
+├── .gitignore
+├── input_stickman_video/
+│   ├── all_bw_images/                 # Original B&W frames (405×720)
+│   ├── all_bw_images_480p/            # Preprocessed to 480×640 (509 images)
+│   └── all_colored_images/            # Color versions (not used)
+├── vae/
+│   ├── model.py                       # GrayscaleVAE: 3.25M params
+│   ├── dataset.py                     # Dataset with augmentation
+│   ├── train_vae.py                   # Training script with AMP
+│   ├── preprocess_images.py           # Resize/pad to 480×640
+│   └── requirements.txt
+└── checkpoints/
+    └── vae/
+        └── run_01/                    # Current training run
+            ├── logs/                  # TensorBoard logs
+            ├── vae_step_XXXXXX.pt     # Checkpoints every 5k steps
+            └── vae_final.pt           # Final model
+```
+
+---
+
+## Stage 1: VAE Training (Current)
+
+### Model Architecture
+
+```python
+# Encoder: 1×640×480 → 4×80×60
+channels: [32, 64, 128]  # base_channels=32, mults=(1,2,4)
+downsample: ×8 (3 downsamples)
+z_channels: 4
+activation: SiLU
+normalization: GroupNorm(8)
+
+# Decoder: 4×80×60 → 1×640×480  
+# Mirror of encoder with upsampling
+```
+
+### Training Config
+
+```bash
+python train_vae.py \
+    --data_dir ../input_stickman_video/all_bw_images_480p \
+    --preprocessed \
+    --batch_size 8 \
+    --base_channels 32 \
+    --lr 1e-4 \
+    --num_steps 50000 \
+    --kl_weight 0.01 \
+    --output_dir ../checkpoints/vae \
+    --run_name run_01
+```
+
+### Monitoring
+
+```bash
+tensorboard --logdir checkpoints/vae/run_01/logs --port 6006
+```
+
+---
+
+## Stage 2: Image Diffusion (Next)
+
+After VAE training completes:
+
+1. Freeze VAE
+2. Build pose-conditioned latent diffusion UNet
+3. Extract pose heatmaps (OpenPose/MediaPipe)
+4. Train on single frames with DDPM loss
+5. Target: ~200k steps
+
+**UNet architecture:**
+- Channels: [128, 256, 512]
+- Pose conditioning: FiLM at mid + bottleneck
+- Minimal spatial attention (lowest res only)
+
+---
+
+## Stage 3: Video Fine-tuning (Future)
+
+1. Add 1D temporal convs at mid + bottleneck
+2. Freeze early spatial layers
+3. Train on 24-48 frame clips
+4. Target: ~50k-100k steps
+
+**Inference target:** ~0.6-1.0s for 24 frames using DDIM/DPM-Solver (15-25 steps)
+
+---
+
+## Dataset Info
+
+- **509 grayscale stickman frames** from various videos
+- Original: 405×720 (portrait, 9:16)
+- Preprocessed: 480×640 (padded with black bars)
+- Strong augmentation during training (flips, rotation, brightness, affine)
+
+---
+
+## Hardware Requirements
+
+- **GPU:** RTX 3090 or A5000 (24GB VRAM)
+- **Batch size:** 8 (with AMP)
+- **Training time:** ~4.5 hours for 50k VAE steps
+
+---
+
+## Quick Commands
+
+```bash
+# Preprocess images (already done)
+cd vae && python preprocess_images.py \
+    --input_dir ../input_stickman_video/all_bw_images \
+    --output_dir ../input_stickman_video/all_bw_images_480p
+
+# Train VAE
+cd vae && PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python train_vae.py \
+    --data_dir ../input_stickman_video/all_bw_images_480p \
+    --preprocessed --batch_size 8 --num_steps 50000
+
+# Test model
+cd vae && python model.py
+```
+
+---
+
+## Dependencies
+
+```
+torch>=2.0.0
+torchvision>=0.15.0
+pillow>=9.0.0
+tqdm
+tensorboard
+lpips
+```

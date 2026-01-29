@@ -28,12 +28,16 @@ tools/
 ├── train_keypoint_v3.py       # Optimized training (ResNet34 + FP16) ← RECOMMENDED
 ├── predict_keypoints_v2.py    # Legacy prediction script
 ├── predict_keypoints_v3.py    # Batch prediction with FP16 ← RECOMMENDED
+├── render_openpose_skeleton.py # Render color-coded OpenPose skeleton images
 ├── checkpoints/               # Saved models
 │   └── best_keypoint_regressor.pt
 └── README.md                  # This file
 
 input_stickman_video/
-├── all_bw_images_480p/        # Source images (509 stickman images, 480x640)
+├── all_bw_images/             # Original B&W stickman images
+├── all_bw_images_480p/        # Resized B&W images (480x640)
+├── all_colored_images/        # Colored stickman images
+├── skeleton_images/           # Rendered OpenPose-style skeletons (from annotations)
 └── keypoint_annotations/
     ├── annotations.json       # Active annotations file (all 509 images)
     ├── annotations_manual_backup_v1.json  # Backup of ~80 manual annotations
@@ -140,7 +144,32 @@ python tools/predict_keypoints_v2.py
 This predicts keypoints on all unannotated images and adds them to the annotations file.
 Manual annotations are preserved and not overwritten.
 
-### Step 4: Review & Correct (Optional)
+### Step 4: Render OpenPose Skeleton Images
+
+Generate color-coded OpenPose-style skeleton visualizations (like ControlNet DWPose output):
+
+```bash
+python tools/render_openpose_skeleton.py
+```
+
+**Options:**
+```bash
+# Custom output directory
+python tools/render_openpose_skeleton.py --output_dir ../output/skeletons
+
+# White background instead of black
+python tools/render_openpose_skeleton.py --background white
+
+# Thicker limbs
+python tools/render_openpose_skeleton.py --stickwidth 6
+
+# Fixed output size instead of original image dimensions
+python tools/render_openpose_skeleton.py --fixed_size --width 512 --height 512
+```
+
+Output: Color-coded skeleton images saved to `input_stickman_video/skeleton_images/`
+
+### Step 5: Review & Correct (Optional)
 
 Run the annotation tool again to review predictions:
 

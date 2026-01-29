@@ -185,11 +185,11 @@ cython_debug/
 # ==================================
 
 # Model checkpoints
-*.pt
-*.pth
-*.ckpt
-*.safetensors
-checkpoints/
+# *.pt
+# *.pth
+# *.ckpt
+# *.safetensors
+# checkpoints/
 
 # TensorBoard logs
 *.tfevents.*

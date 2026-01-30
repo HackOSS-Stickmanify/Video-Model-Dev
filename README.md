@@ -58,7 +58,7 @@ Video-Model-Dev/
 │   │   └── annotations_manual_*.json  # Manual annotation backups
 │   └── README.md                      # Dataset documentation
 ├── tools/
-│   ├── annotate_keypoints.py          # Manual annotation GUI
+│   ├── annotate_keypoints.py          # Manual annotation GUI (with delete functionality)
 │   ├── train_keypoint_v3.py           # Train keypoint prediction model
 │   ├── predict_keypoints_v3.py        # Batch predict keypoints
 │   ├── render_openpose_skeleton.py    # Render color-coded skeletons

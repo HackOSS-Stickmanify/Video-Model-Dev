@@ -9,7 +9,9 @@ import json
 import os
 import glob
 import numpy as np
+import shutil
 from pathlib import Path
+from datetime import datetime
 
 # OpenPose body keypoints (18 points, indices 0-17)
 BODY_KEYPOINTS = [
@@ -59,6 +61,15 @@ class KeypointAnnotator:
         self.image_dir = Path(image_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
+        
+        # Set up image directories for deletion
+        self.project_dir = self.image_dir.parent
+        self.all_image_dirs = [
+            self.project_dir / "all_bw_images",
+            self.project_dir / "all_bw_images_480p",
+            self.project_dir / "all_colored_images",
+            self.project_dir / "skeleton_images"
+        ]
         
         # Load all images
         self.image_files = sorted(glob.glob(str(self.image_dir / "*.jpg")))
@@ -154,7 +165,7 @@ class KeypointAnnotator:
                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         cv2.putText(self.display_img, f"Next: {next_kpt} ({self.current_keypoint_idx}/{len(BODY_KEYPOINTS)})", 
                    (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-        cv2.putText(self.display_img, "Left-click: place | Right-click: skip | U: undo | C: copy prev | S: save", 
+        cv2.putText(self.display_img, "Left-click: place | Right-click: skip | U: undo | C: copy | S: save | X: DELETE", 
                    (10, self.display_img.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         
         cv2.imshow(self.window_name, self.display_img)
@@ -213,6 +224,58 @@ class KeypointAnnotator:
         self.save_annotations()
         print(f"Saved annotation for {img_name}")
     
+    def delete_current_image(self):
+        """Delete current image from all directories and remove annotation"""
+        img_name = self.get_current_image_name()
+        
+        print(f"\n{'='*60}")
+        print(f"DELETE: {img_name}")
+        print(f"{'='*60}")
+        
+        deleted_count = 0
+        
+        # Delete from all image directories
+        for img_dir in self.all_image_dirs:
+            img_path = img_dir / img_name
+            if img_path.exists():
+                try:
+                    img_path.unlink()
+                    print(f"  ✓ Deleted from {img_dir.name}/")
+                    deleted_count += 1
+                except Exception as e:
+                    print(f"  ✗ Error deleting from {img_dir.name}/: {e}")
+        
+        # Remove from annotation
+        if img_name in self.keypoints:
+            # Backup annotations before deletion
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = self.output_dir / f"annotations_backup_{timestamp}.json"
+            anno_file = self.output_dir / "annotations.json"
+            if anno_file.exists():
+                shutil.copy2(anno_file, backup_file)
+            
+            del self.keypoints[img_name]
+            self.save_annotations()
+            print(f"  ✓ Removed annotation")
+            print(f"  ✓ Created backup: {backup_file.name}")
+        
+        # Remove from image file list
+        current_path = self.image_files[self.current_idx]
+        self.image_files.pop(self.current_idx)
+        
+        print(f"\nDeleted {deleted_count} file(s). {len(self.image_files)} images remaining.")
+        print(f"{'='*60}\n")
+        
+        # Move to next image or previous if at end
+        if len(self.image_files) == 0:
+            print("No more images to annotate!")
+            cv2.destroyAllWindows()
+            exit(0)
+        elif self.current_idx >= len(self.image_files):
+            self.current_idx = len(self.image_files) - 1
+        
+        self.load_current_image()
+    
     def next_image(self):
         """Move to next image"""
         if self.current_keypoint_idx > 0:
@@ -243,6 +306,7 @@ class KeypointAnnotator:
         print("  U: Undo last keypoint")
         print("  C: Copy keypoints from previous image")
         print("  S: Save current annotation")
+        print("  X: DELETE current image and annotation (creates backup)")
         print("  N/D/→: Next image")
         print("  P/A/←: Previous image")
         print("  Q/ESC: Quit")
@@ -266,6 +330,8 @@ class KeypointAnnotator:
                 self.copy_from_previous()
             elif key == ord('s'):  # Save
                 self.save_current_image()
+            elif key == ord('x'):  # Delete
+                self.delete_current_image()
         
         cv2.destroyAllWindows()
         print("\nAnnotation session complete!")

@@ -90,6 +90,19 @@ Backup of ~80 manually annotated images (early checkpoint).
 ### `annotations_manual_backup_v2.json`
 Backup of 126 manually annotated images (used to train the prediction model).
 
+### `annotations_backup_{timestamp}.json`
+Automatic timestamped backups created when deleting images via the annotation tool (press **X**). These backups are created before any deletion to ensure data safety.
+
+## Removing Bad/Corrupt Images
+
+If you encounter bad or corrupt images during annotation, you can delete them directly from the annotation tool:
+
+1. Press **X** while viewing a bad image
+2. The image will be removed from ALL directories (all_bw_images, all_bw_images_480p, all_colored_images, skeleton_images)
+3. Its annotation will be removed from annotations.json
+4. A timestamped backup is automatically created
+5. The tool moves to the next image
+
 ## Data Summary
 
 | Metric | Value |

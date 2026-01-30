@@ -85,7 +85,15 @@ python tools/annotate_keypoints.py
 | U | Undo last keypoint |
 | C | Copy keypoints from previous image |
 | S | Save current annotation |
+| **X** | **DELETE current image and annotation (creates backup)** |
 | Q / ESC | Quit |
+
+**Delete Functionality:**
+Press **X** to delete the current bad/corrupt image. This will:
+- Remove the image from all directories (all_bw_images, all_bw_images_480p, all_colored_images, skeleton_images)
+- Remove its annotation from annotations.json
+- Automatically create a timestamped backup of annotations.json
+- Move to the next image
 
 **Keypoint Order (OpenPose 18-point):**
 1. nose

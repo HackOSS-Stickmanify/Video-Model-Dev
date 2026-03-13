@@ -1,6 +1,8 @@
 """
-Dataset for grayscale VAE training with strong augmentation.
+Dataset for VAE training with strong augmentation.
 Handles resizing/padding portrait images to 480×640 (W×H).
+
+Supports both grayscale (1 channel) and color (3 channel RGB) images.
 """
 
 import os
@@ -15,12 +17,19 @@ import torchvision.transforms as T
 import torchvision.transforms.functional as TF
 
 
-class GrayscaleImageDataset(Dataset):
+class ImageDataset(Dataset):
     """
-    Dataset for grayscale images with augmentation.
+    Dataset for grayscale or color images with augmentation.
     
     Target size: 480×640 (width×height, portrait)
     Images are resized to fit height, then padded width if needed.
+    
+    Args:
+        image_dir: Directory containing images
+        target_size: Target (width, height) tuple
+        augment: Whether to apply data augmentation
+        extensions: File extensions to look for
+        color_mode: "L" for grayscale, "RGB" for color
     """
     
     def __init__(
@@ -29,12 +38,20 @@ class GrayscaleImageDataset(Dataset):
         target_size: tuple[int, int] = (480, 640),  # (width, height)
         augment: bool = True,
         extensions: tuple = ('.jpg', '.jpeg', '.png', '.bmp'),
+        color_mode: str = "L",  # "L" for grayscale, "RGB" for color
     ):
         super().__init__()
         
         self.image_dir = Path(image_dir)
         self.target_size = target_size  # (W, H)
         self.augment = augment
+        self.color_mode = color_mode.upper()
+        
+        if self.color_mode not in ("L", "RGB"):
+            raise ValueError(f"color_mode must be 'L' or 'RGB', got {color_mode}")
+        
+        # Padding color (white)
+        self.pad_color = 255 if self.color_mode == "L" else (255, 255, 255)
         
         # Collect image paths
         self.image_paths = []
@@ -68,8 +85,8 @@ class GrayscaleImageDataset(Dataset):
         if new_w < target_w:
             pad_left = (target_w - new_w) // 2
             pad_right = target_w - new_w - pad_left
-            # Create new image with padding (white = 255)
-            padded = Image.new('L', (target_w, target_h), 255)
+            # Create new image with padding
+            padded = Image.new(self.color_mode, (target_w, target_h), self.pad_color)
             padded.paste(img, (pad_left, 0))
             img = padded
         elif new_w > target_w:
@@ -89,7 +106,7 @@ class GrayscaleImageDataset(Dataset):
         # Random slight rotation (-5 to +5 degrees)
         if random.random() > 0.5:
             angle = random.uniform(-5, 5)
-            img = TF.rotate(img, angle, fill=255)
+            img = TF.rotate(img, angle, fill=self.pad_color)
         
         # Random brightness/contrast adjustment
         if random.random() > 0.5:
@@ -111,16 +128,28 @@ class GrayscaleImageDataset(Dataset):
                 translate=(int(translate_x * self.target_size[0]), int(translate_y * self.target_size[1])),
                 scale=scale,
                 shear=0,
-                fill=255,
+                fill=self.pad_color,
             )
+        
+        # Color-specific augmentations
+        if self.color_mode == "RGB":
+            # Random saturation adjustment
+            if random.random() > 0.5:
+                saturation_factor = random.uniform(0.8, 1.2)
+                img = TF.adjust_saturation(img, saturation_factor)
+            
+            # Random hue adjustment (small)
+            if random.random() > 0.5:
+                hue_factor = random.uniform(-0.05, 0.05)
+                img = TF.adjust_hue(img, hue_factor)
         
         return img
     
     def __getitem__(self, idx: int) -> torch.Tensor:
         img_path = self.image_paths[idx]
         
-        # Load as grayscale
-        img = Image.open(img_path).convert('L')
+        # Load in appropriate color mode
+        img = Image.open(img_path).convert(self.color_mode)
         
         # Resize and pad to target size
         img = self._resize_and_pad(img)
@@ -130,15 +159,26 @@ class GrayscaleImageDataset(Dataset):
             img = self._augment(img)
         
         # Convert to tensor [0, 1] then normalize to [-1, 1]
-        tensor = TF.to_tensor(img)  # [1, H, W] in [0, 1]
+        # Grayscale: [1, H, W], RGB: [3, H, W]
+        tensor = TF.to_tensor(img)  # [C, H, W] in [0, 1]
         tensor = tensor * 2 - 1      # [-1, 1]
         
         return tensor
 
 
+# Backwards compatibility alias
+GrayscaleImageDataset = ImageDataset
+
+
 class PreprocessedDataset(Dataset):
     """
     Dataset for pre-resized images (faster loading).
+    
+    Args:
+        image_dir: Directory containing preprocessed images
+        augment: Whether to apply data augmentation
+        extensions: File extensions to look for
+        color_mode: "L" for grayscale, "RGB" for color
     """
     
     def __init__(
@@ -146,11 +186,18 @@ class PreprocessedDataset(Dataset):
         image_dir: str,
         augment: bool = True,
         extensions: tuple = ('.jpg', '.jpeg', '.png', '.bmp'),
+        color_mode: str = "L",  # "L" for grayscale, "RGB" for color
     ):
         super().__init__()
         
         self.image_dir = Path(image_dir)
         self.augment = augment
+        self.color_mode = color_mode.upper()
+        
+        if self.color_mode not in ("L", "RGB"):
+            raise ValueError(f"color_mode must be 'L' or 'RGB', got {color_mode}")
+        
+        self.pad_color = 255 if self.color_mode == "L" else (255, 255, 255)
         
         # Collect image paths
         self.image_paths = []
@@ -180,7 +227,7 @@ class PreprocessedDataset(Dataset):
         
         if random.random() > 0.5:
             angle = random.uniform(-5, 5)
-            img = TF.rotate(img, angle, fill=255)
+            img = TF.rotate(img, angle, fill=self.pad_color)
         
         if random.random() > 0.5:
             brightness_factor = random.uniform(0.9, 1.1)
@@ -190,14 +237,25 @@ class PreprocessedDataset(Dataset):
             contrast_factor = random.uniform(0.9, 1.1)
             img = TF.adjust_contrast(img, contrast_factor)
         
+        # Color-specific augmentations
+        if self.color_mode == "RGB":
+            if random.random() > 0.5:
+                saturation_factor = random.uniform(0.8, 1.2)
+                img = TF.adjust_saturation(img, saturation_factor)
+            
+            if random.random() > 0.5:
+                hue_factor = random.uniform(-0.05, 0.05)
+                img = TF.adjust_hue(img, hue_factor)
+        
         return img
     
     def __getitem__(self, idx: int) -> torch.Tensor:
-        img = Image.open(self.image_paths[idx]).convert('L')
+        img = Image.open(self.image_paths[idx]).convert(self.color_mode)
         
         if self.augment:
             img = self._augment(img)
         
+        # Grayscale: [1, H, W], RGB: [3, H, W]
         tensor = TF.to_tensor(img) * 2 - 1
         return tensor
 
@@ -211,10 +269,18 @@ if __name__ == '__main__':
     else:
         image_dir = '../input_stickman_video/all_bw_images'
     
-    dataset = GrayscaleImageDataset(image_dir, augment=True)
-    
-    print(f"\nDataset size: {len(dataset)}")
-    
+    # Test grayscale
+    print("Testing grayscale dataset:")
+    dataset = ImageDataset(image_dir, augment=True, color_mode="L")
+    print(f"Dataset size: {len(dataset)}")
     sample = dataset[0]
     print(f"Sample shape: {sample.shape}")
     print(f"Sample range: [{sample.min():.2f}, {sample.max():.2f}]")
+    
+    # Test color
+    print("\nTesting color dataset:")
+    dataset_rgb = ImageDataset(image_dir, augment=True, color_mode="RGB")
+    print(f"Dataset size: {len(dataset_rgb)}")
+    sample_rgb = dataset_rgb[0]
+    print(f"Sample shape: {sample_rgb.shape}")
+    print(f"Sample range: [{sample_rgb.min():.2f}, {sample_rgb.max():.2f}]")

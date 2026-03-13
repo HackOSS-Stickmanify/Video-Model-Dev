@@ -1,0 +1,64 @@
+# VAE Training Configuration (Color/RGB)
+# For training on RGB color images (3 channels)
+#
+# Note: Paths are relative to the vae/ directory where train_vae.py runs.
+# Run with: cd vae && python train_vae.py --config ../configs/vae_color.yaml
+
+# Data settings
+data_dir: "../input_stickman_video/all_colored_images"
+preprocessed: false  # Set to true if images are already resized to target size
+target_width: 480
+target_height: 640
+val_split: 0.1  # 10% for validation
+color: true  # RGB color (3 channels)
+
+# Model architecture
+# Note: Color images benefit from slightly larger latent space
+base_channels: 32
+channel_mults: [1, 2, 4]  # Results in 32 -> 64 -> 128 channels
+z_channels: 8  # Larger latent space for color (was 4 for grayscale)
+num_res_blocks: 2
+
+# Loss weights
+kl_weight: 0.01  # β in β-VAE (small value for sharp reconstructions)
+lpips_weight: 0.1  # Perceptual loss weight (only used if use_lpips is true)
+use_lpips: true  # Recommended for color images - better perceptual quality
+
+# Training hyperparameters
+# Note: Color images use 3x more memory, so reduce batch size accordingly
+batch_size: 4  # Reduced from 8 due to 3x channels
+lr: 0.0001  # 1e-4
+min_lr: 0.000001  # 1e-6
+num_steps: 10000  # More steps for color (more to learn)
+warmup_steps: 1500  # Slightly longer warmup
+grad_clip: 1.0  # Gradient clipping (0 to disable)
+grad_accum: 2  # Accumulate gradients to simulate larger batch
+
+# EMA (Exponential Moving Average)
+use_ema: true
+ema_decay: 0.999
+ema_update_after: 100  # Start EMA after this many steps
+ema_update_every: 10  # Update EMA every N steps
+
+# Logging and checkpointing
+log_every: 100  # Log to TensorBoard every N steps
+save_every: 5000  # Save checkpoint every N steps
+sample_every: 1000  # Log reconstructions every N steps
+val_every: 1000  # Run validation every N steps
+output_dir: "../checkpoints/vae"
+run_name: null  # Auto-generated if null (timestamp)
+
+# Early stopping
+early_stopping: true
+patience: 15  # More patience for color (slower convergence)
+min_delta: 0.0001  # Minimum improvement to reset patience
+
+# Hardware settings
+num_workers: 4
+no_amp: false  # Set to true to disable mixed precision
+compile: false  # Set to true to use torch.compile (faster but slower startup)
+seed: null  # Set for reproducibility
+device: null  # Auto-detect (cuda > xpu > cpu), or set to "cuda", "xpu", or "cpu"
+
+# Resume training (set to checkpoint path to resume)
+resume: null

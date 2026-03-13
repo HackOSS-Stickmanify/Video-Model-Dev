@@ -24,14 +24,17 @@ Tools for annotating stickman images with OpenPose-style 18-keypoint body pose d
 ```
 tools/
 ├── annotate_keypoints.py      # Manual annotation GUI (OpenCV-based)
-├── train_keypoint_v2.py       # Legacy training script (ResNet18)
-├── train_keypoint_v3.py       # Optimized training (ResNet34 + FP16) ← RECOMMENDED
-├── predict_keypoints_v2.py    # Legacy prediction script
-├── predict_keypoints_v3.py    # Batch prediction with FP16 ← RECOMMENDED
+├── train_keypoint.py          # Optimized training (ResNet34 + FP16)
+├── predict_keypoints.py       # Batch prediction with FP16
 ├── render_openpose_skeleton.py # Render color-coded OpenPose skeleton images
-├── checkpoints/               # Saved models
-│   └── best_keypoint_regressor.pt
+├── pose_heatmaps.py           # Generate pose heatmaps for diffusion
+├── replace_background_white.py # Background replacement utility
+├── group_similar_images.py    # Image similarity grouping
 └── README.md                  # This file
+
+checkpoints/
+└── keypoint/                  # Keypoint model checkpoints
+    └── best_keypoint_regressor.pt
 
 input_stickman_video/
 ├── all_bw_images/             # Original B&W stickman images
@@ -120,11 +123,8 @@ Press **X** to delete the current bad/corrupt image. This will:
 After annotating 50-100 diverse images:
 
 ```bash
-# Recommended (optimized for RTX 3090)
-python tools/train_keypoint_v3.py --backbone resnet34 --batch-size 64 --epochs 150
-
-# Legacy version
-python tools/train_keypoint_v2.py
+# Optimized for RTX 3090
+python tools/train_keypoint.py --backbone resnet34 --batch-size 64 --epochs 150
 ```
 
 **Features (v3):**
@@ -136,17 +136,14 @@ python tools/train_keypoint_v2.py
 - Early stopping with patience=25
 
 **Training output:**
-- Best model saved to `tools/checkpoints/best_keypoint_regressor.pt`
+- Best model saved to `checkpoints/keypoint/best_keypoint_regressor.pt`
 - Reports pixel error on validation set (~5.7px with 126 training images)
 
 ### Step 3: Predict on All Images
 
 ```bash
-# Recommended (batch processing with FP16)
-python tools/predict_keypoints_v3.py --batch-size 64
-
-# Legacy version
-python tools/predict_keypoints_v2.py
+# Batch processing with FP16
+python tools/predict_keypoints.py --batch-size 64
 ```
 
 This predicts keypoints on all unannotated images and adds them to the annotations file.
@@ -243,8 +240,8 @@ If you need to modify this:
 
 3. **To retrain after adding annotations**:
    ```bash
-   python tools/train_keypoint_v3.py --backbone resnet34 --batch-size 64
-   python tools/predict_keypoints_v3.py --batch-size 64
+   python tools/train_keypoint.py --backbone resnet34 --batch-size 64
+   python tools/predict_keypoints.py --batch-size 64
    ```
 
 4. **To restore manual-only annotations**:

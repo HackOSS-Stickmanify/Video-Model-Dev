@@ -1,0 +1,101 @@
+[project]
+name = "video-model-dev"
+version = "0.1.0"
+description = "Fast Pose→Video Generation System (480p Grayscale)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Video Model Dev Team"}
+]
+keywords = ["video-generation", "pose-estimation", "vae", "diffusion", "pytorch"]
+
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "pillow>=9.0.0",
+    "tqdm>=4.65.0",
+    "tensorboard>=2.13.0",
+    "lpips>=0.1.4",
+    "numpy>=1.24.0",
+    "opencv-python>=4.7.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.3.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.3.0",
+    "ruff>=0.0.270",
+    "mypy>=1.3.0",
+]
+wandb = [
+    "wandb>=0.15.0",
+]
+all = [
+    "video-model-dev[dev,wandb]",
+]
+
+[project.scripts]
+train-vae = "vae.train_vae:main"
+preprocess-images = "vae.preprocess_images:main"
+train-diffusion = "diffusion.train_diffusion:main"
+diffusion-inference = "diffusion.inference:main"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vae*", "tools*", "diffusion*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+    | \.mypy_cache
+    | \.ruff_cache
+    | \.venv
+    | __pycache__
+    | checkpoints
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+]
+ignore = [
+    "E501",   # line too long (handled by black)
+    "B008",   # do not perform function calls in argument defaults
+    "C901",   # too complex
+    "W191",   # indentation contains tabs
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"

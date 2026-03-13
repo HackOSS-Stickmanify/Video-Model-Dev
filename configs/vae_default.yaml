@@ -1,0 +1,62 @@
+# VAE Training Configuration (Grayscale)
+# Copy this file and modify for your experiments
+#
+# Note: Paths are relative to the vae/ directory where train_vae.py runs.
+# Run with: cd vae && python train_vae.py --config ../configs/vae_default.yaml
+
+# Data settings
+data_dir: "../input_stickman_video/all_bw_images_480p"
+preprocessed: true
+target_width: 480
+target_height: 640
+val_split: 0.1  # 10% for validation
+color: false  # Grayscale (1 channel)
+
+# Model architecture
+base_channels: 32
+channel_mults: [1, 2, 4]  # Results in 32 -> 64 -> 128 channels
+z_channels: 4  # Latent channels
+num_res_blocks: 2
+
+# Loss weights
+kl_weight: 0.01  # β in β-VAE (small value for sharp reconstructions)
+lpips_weight: 0.1  # Perceptual loss weight (only used if use_lpips is true)
+use_lpips: false  # Enable for better perceptual quality (slower training)
+
+# Training hyperparameters
+batch_size: 8
+lr: 0.0001  # 1e-4
+min_lr: 0.000001  # 1e-6
+num_steps: 2000
+warmup_steps: 1000  # Linear warmup for LR
+grad_clip: 1.0  # Gradient clipping (0 to disable)
+grad_accum: 1  # Gradient accumulation steps
+
+# EMA (Exponential Moving Average)
+use_ema: true
+ema_decay: 0.999
+ema_update_after: 100  # Start EMA after this many steps
+ema_update_every: 10  # Update EMA every N steps
+
+# Logging and checkpointing
+log_every: 100  # Log to TensorBoard every N steps
+save_every: 5000  # Save checkpoint every N steps
+sample_every: 1000  # Log reconstructions every N steps
+val_every: 1000  # Run validation every N steps
+output_dir: "../checkpoints/vae"
+run_name: null  # Auto-generated if null (timestamp)
+
+# Early stopping
+early_stopping: true
+patience: 10  # Stop after N validations without improvement
+min_delta: 0.0001  # Minimum improvement to reset patience
+
+# Hardware settings
+num_workers: 4
+no_amp: false  # Set to true to disable mixed precision
+compile: false  # Set to true to use torch.compile (faster but slower startup)
+seed: null  # Set for reproducibility
+device: null  # Auto-detect (cuda > xpu > cpu), or set to "cuda", "xpu", or "cpu"
+
+# Resume training (set to checkpoint path to resume)
+resume: null

@@ -1,0 +1,88 @@
+# Configuration for pose-conditioned latent diffusion with COLOR VAE
+# Stage 2 of the Video Model pipeline
+# Use this config when training with a color (RGB) VAE
+
+# =============================================================================
+# Data
+# =============================================================================
+# Either provide latent_dir (pre-encoded) or image_dir + vae_checkpoint
+latent_dir: null  # Will be auto-created if null
+image_dir: "../input_stickman_video/all_colored_images"
+vae_checkpoint: null  # Required: path to trained COLOR VAE checkpoint
+annotations: "../input_stickman_video/keypoint_annotations/annotations.json"
+
+# Dataset settings
+val_split: 0.1
+include_limbs: true  # Include limb heatmaps (17 channels)
+
+# =============================================================================
+# Model Architecture (UNet)
+# =============================================================================
+# Latent channels - must match VAE
+# z_channels: 8 for color VAE (larger latent space for RGB)
+z_channels: 8
+
+# UNet settings - slightly larger for color
+base_channels: 128
+channel_mults: [1, 2, 4]  # Progressive channel scaling
+num_res_blocks: 2         # ResBlocks per level
+attention_levels: [1, 2]  # Apply self-attention at these levels (0=highest res)
+pose_channels: 35         # 18 keypoints + 17 limbs
+dropout: 0.0
+
+# =============================================================================
+# Noise Scheduler
+# =============================================================================
+num_timesteps: 1000
+schedule: "cosine"  # Options: linear, cosine, scaled_linear
+prediction_type: "epsilon"  # Options: epsilon, v_prediction
+clip_sample: true
+
+# =============================================================================
+# Training
+# =============================================================================
+# Reduced batch size for color (larger latents use more memory)
+batch_size: 4
+lr: 0.0001
+min_lr: 0.000001
+num_steps: 75000  # More steps for color
+warmup_steps: 1500
+
+# Gradient settings
+grad_clip: 1.0
+grad_accum: 2  # Gradient accumulation to simulate larger batch
+
+# =============================================================================
+# EMA (Exponential Moving Average)
+# =============================================================================
+use_ema: true
+ema_decay: 0.9999
+ema_update_after: 100
+ema_update_every: 10
+
+# =============================================================================
+# Logging & Checkpointing
+# =============================================================================
+log_every: 100
+save_every: 5000
+sample_every: 2000
+val_every: 1000
+
+output_dir: "../checkpoints/diffusion"
+run_name: null  # Auto-generated timestamp if null
+
+# =============================================================================
+# Early Stopping
+# =============================================================================
+early_stopping: true
+patience: 15  # More patience for color training
+min_delta: 0.0001
+
+# =============================================================================
+# System
+# =============================================================================
+num_workers: 4
+no_amp: false  # Set to true to disable mixed precision
+seed: null     # Random seed (null for random)
+device: null   # Auto-detect (cuda > cpu)
+resume: null   # Path to checkpoint for resuming

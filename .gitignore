@@ -173,8 +173,8 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-# Cursor  
-#  Cursor is an AI-powered code editor.`.cursorignore` specifies files/directories to 
+# Cursor
+#  Cursor is an AI-powered code editor.`.cursorignore` specifies files/directories to
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
@@ -198,8 +198,10 @@ tensorboard/
 
 # Training outputs
 outputs/
+output/
 samples/
 reconstructions/
+test_output/
 
 # Video files
 *.mp4
@@ -231,3 +233,5 @@ wandb/
 
 # Hugging Face
 .cache/
+checkpoints/
+input_stickman_video/
